@@ -33,8 +33,8 @@ class DictEmulator(MutableMapping):
     def __delitem__(self, key):
         del self.__dict__[key]
 
-    def get(self, key, *args):
-        return self.__dict__.get(key, args[0]) if args else self.__dict__.get(key)
+    def get(self, key, value=None):
+        return self.__dict__.get(key, value)
 
     def __len__(self):
         return len(self.__dict__)

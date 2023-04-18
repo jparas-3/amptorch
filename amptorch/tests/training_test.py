@@ -3,6 +3,7 @@ import numpy as np
 import torch
 from ase import Atoms
 from ase.calculators.emt import EMT
+from ..trainer_config import ConfigModel, ConfigOptim, ConfigDataset, G2Params, G4Params, GaussianParams, ConfigCmd, Config
 
 from amptorch.trainer import AtomsTrainer
 
@@ -24,43 +25,71 @@ for dist in distances:
     images.append(image)
 
 ### Construct parameters
-Gs = {
-    "default": {
-        "G2": {
-            "etas": np.logspace(np.log10(0.05), np.log10(5.0), num=4),
-            "rs_s": [0],
-        },
-        "G4": {"etas": [0.005], "zetas": [1.0, 4.0], "gammas": [1.0, -1.0]},
-        "cutoff": 6,
-    },
-}
+# Gs = {
+#     "default": {
+#         "G2": {
+#             "etas": np.logspace(np.log10(0.05), np.log10(5.0), num=4),
+#             "rs_s": [0],
+#         },
+#         "G4": {"etas": [0.005], "zetas": [1.0, 4.0], "gammas": [1.0, -1.0]},
+#         "cutoff": 6,
+#     },
+# }
+G2 = G2Params(etas=np.logspace(np.log10(0.05), np.log10(5.0), num=4), rs_s=[0])
+G4 = G4Params(etas=[0.005], zetas=[1.0, 4.0], gammas=[1.0, -1.0])
+default = GaussianParams(G2=G2, G4=G4, cutoff=6)
+Gs = {'default': default}
+
 elements = ["Cu", "C", "O"]
 
-config = {
-    "model": {"get_forces": True, "num_layers": 3, "num_nodes": 20},
-    "optim": {
-        "force_coefficient": 0.04,
-        "lr": 1e-2,
-        "batch_size": 30,
-        "epochs": 300,
-        "loss": "mse",
-        "metric": "mae",
-    },
-    "dataset": {
-        "raw_data": images,
-        "val_split": 0,
-        "elements": elements,
-        "fp_params": Gs,
-        "scaling": {"type": "standardize"},
-    },
-    "cmd": {
-        "debug": False,
-        "seed": 1,
-        "identifier": "test",
-        "verbose": False,
-        "logger": False,
-    },
-}
+model = ConfigModel(num_layers=3,
+                    num_nodes=20,
+                    get_forces=True)
+
+optim = ConfigOptim(force_coefficient=0.04,
+                    lr=1e-2, batch_size=30,
+                    epochs=300, loss="mse",
+                    metric="mae")
+
+dataset = ConfigDataset(raw_data=images,
+                        val_split=0,
+                        elements=elements,
+                        fp_params=Gs,
+                        scaling={"type": "standardize"})
+
+cmd = ConfigCmd(debug=False,
+                seed=1,
+                identifier="test",
+                verbose=False,
+                logger=False)
+
+config = Config(model=model, optim=optim, dataset=dataset, cmd=cmd)
+
+# config = {
+#     "model": {"get_forces": True, "num_layers": 3, "num_nodes": 20},
+#     "optim": {
+#         "force_coefficient": 0.04,
+#         "lr": 1e-2,
+#         "batch_size": 30,
+#         "epochs": 300,
+#         "loss": "mse",
+#         "metric": "mae",
+#     },
+#     "dataset": {
+#         "raw_data": images,
+#         "val_split": 0,
+#         "elements": elements,
+#         "fp_params": Gs,
+#         "scaling": {"type": "standardize"},
+#     },
+#     "cmd": {
+#         "debug": False,
+#         "seed": 1,
+#         "identifier": "test",
+#         "verbose": False,
+#         "logger": False,
+#     },
+# }
 
 true_energies = np.array([image.get_potential_energy() for image in images])
 true_forces = np.concatenate(np.array([image.get_forces() for image in images]))

@@ -31,6 +31,7 @@ md_work/*
 *results*
 *.lmdb*
 .vscode/
+.idea/
 
 
 #build/compiled_files

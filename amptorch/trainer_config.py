@@ -1,12 +1,151 @@
-from typing import List, Dict, Union, Optional
+from typing import List, Dict, Union, Optional, Sequence
 from dataclasses import dataclass
+from abc import ABC
+from datetime import datetime
 import os
-import ase
+from ase import Atoms
 import torch
 
 
+class DictEmulator(ABC):
+    """
+    Abstract base class for emulating a dictionary, inherited by all the config dataclasses
+    """
+    def __getitem__(self, item):
+        return self.__dict__[item]
+
+    def __setitem__(self, key, value):
+        self.__dict__[key] = value
+
+    def __iter__(self):
+        return iter(self.__dict__)
+
+    def __delitem__(self, key):
+        del self.__dict__[key]
+
+    def get(self, key, *args):
+        return self.__dict__.get(key, args[0]) if args else self.__dict__.get(key)
+
+
 @dataclass
-class Config_Model:
+class FingerprintParams(DictEmulator, ABC):
+    """
+    Abstract base class for fp_params
+    """
+    cutoff: int
+
+
+@dataclass
+class GMPsParams(FingerprintParams):
+    """
+    Dataclass to represent the Gaussian Momenta Parameters (GMPs) dictionary object as input to Config class fp_params.
+
+    Attributes:
+    -----------
+    orders : List[int]
+        List of integer orders of the spherical harmonics functions. For example, [0, 1, 2, 3] would account up to order 3 from order 0.
+    sigmas : List[float]
+        List of float values of the widths of the Gaussian basis functions.
+    atom_gaussians : Dict[str], optional
+        Dictionary mapping element symbols to paths of the corresponding pseudodensity files containing Gaussian basis functions for each element.
+    square : bool, optional
+        Boolean flag indicating whether to square the solid harmonics functions for smoothness in gradient calculation.
+        Default is True.
+    solid_harmonics : bool, optional
+        Boolean flag indicating whether to use solid harmonics functions instead of real spherical harmonics. Default is True.
+    """
+
+    orders: List[int]
+    sigmas: List[float]
+    atom_gaussians: Dict[str, str]
+    square: bool = True
+    solid_harmonics: bool = True
+
+    # def load_atom_gaussians(self, directory: str) -> None:
+    #     for element in self.atom_gaussians:
+    #         filename = os.path.join(directory, f"{element}_pseudodensity.g")
+    #         self.atom_gaussians[element] = filename
+
+
+@dataclass
+class G2Params(DictEmulator):
+    """
+    Dataclass representing parameters for the G2 component of the gaussian symmetry function.
+
+    Attributes:
+    -----------
+    etas: List[float]
+        A list of the exponents used in the G2 function.
+    rs_s: List[float]
+        A list of radial offsets used in the G2 function.
+    """
+
+    etas: Sequence[float]
+    rs_s: Sequence[float]
+
+
+@dataclass
+class G4Params(DictEmulator):
+    """
+    Dataclass representing parameters for the G2 component of the gaussian symmetry function.
+
+    Attributes:
+    -----------
+    etas: List[float]
+        A list of exponents used in the G4 function.
+    zetas: List[float]
+        A list of zetas used in the G4 function.
+    gammas: List[float]
+        A list of gammas used in the G4 function.
+    """
+
+    etas: Sequence[float]
+    zetas: Sequence[float]
+    gammas: Sequence[float]
+
+
+@dataclass
+class GaussianParams(FingerprintParams):
+    """
+    Dataclass for Gaussian Symmetry Function with G2 and G4 with a cutoff.
+
+    Attributes:
+    -----------
+    gaussian : Dict
+        A dictionary of Gaussian types (G2 and G4) and their parameters.
+
+    cutoff : float
+        The cutoff value.
+    """
+
+    G2: G2Params
+    G4: G4Params
+
+    # def __init__(self, gaussian, cutoff):
+    #     self.gaussian = gaussian
+    #     self.cutoff = cutoff
+    #
+    # @classmethod
+    # def from_dict(cls, params_dict):
+    #     gaussian_params = params_dict.get("gaussian", {})
+    #     g2_params_dict = gaussian_params.get("G2", {})
+    #     g4_params_dict = gaussian_params.get("G4", {})
+    #     g2_params = G2Params(
+    #         etas=g2_params_dict.get("etas", []), rs_s=g2_params_dict.get("rs_s", [])
+    #     )
+    #     g4_params = G4Params(
+    #         etas=g4_params_dict.get("etas", []),
+    #         zetas=g4_params_dict.get("zetas", []),
+    #         gammas=g4_params_dict.get("gammas", []),
+    #     )
+    #     return cls(
+    #         gaussian={"G2": g2_params, "G4": g4_params},
+    #         cutoff=params_dict.get("cutoff", 6),
+    #     )
+
+
+@dataclass
+class ConfigModel(DictEmulator):
     """
     Configuration to define the atomistic neural network model configuration.
 
@@ -27,17 +166,17 @@ class Config_Model:
         **custom_args: Any additional arguments used to customize existing/new models
     """
 
-    name: str
     num_layers: int
     num_nodes: int
-    get_forces: bool = True
-    batchnorm: bool = True
-    activation: object = None
-    custom_args: Dict[str, Union[int, bool, object]] = None
+    name: Optional[str] = "SingleNN"
+    get_forces: Optional[bool] = True
+    batchnorm: Optional[bool] = False
+    activation: Optional[object] = torch.nn.Tanh
+    custom_args: Optional[Dict[str, Union[int, bool, object]]] = None
 
 
 @dataclass
-class Config_Optim:
+class ConfigOptim(DictEmulator):
     """
     Configuration to define the resources, and setting for neural network optimization.
 
@@ -67,20 +206,20 @@ class Config_Optim:
         {"policy": "StepLR", "params": {"step_size": 10, "gamma": 0.1}}
     """
 
-    gpus: int = 0
-    force_coefficient: float = 0
-    lr: float = 1e-1
-    batch_size: int = 32
-    epochs: int = 100
-    optimizer: object = torch.optim.Adam
-    loss: str = "mse"
-    metric: str = "mae"
-    cp_metric: str = "energy"
-    scheduler: object = None
+    gpus: Optional[int] = 0
+    force_coefficient: Optional[float] = 0
+    lr: Optional[float] = 1e-1
+    batch_size: Optional[int] = 32
+    epochs: Optional[int] = 100
+    optimizer: Optional[object] = torch.optim.Adam
+    loss: Optional[str] = "mse"
+    metric: Optional[str] = "mae"
+    cp_metric: Optional[str] = "energy"
+    scheduler: Optional[object] = None
 
 
 @dataclass
-class Config_Dataset:
+class ConfigDataset(DictEmulator):
     """
     Configuration to define the dataset used for training, and featurization scheme to be used. Featurization default to Guassian Multipole Fingerprinting.
 
@@ -109,128 +248,19 @@ class Config_Dataset:
         standardization (scales data to mean=0, stdev=1) - {"type": "standardize"}.
     """
 
-    raw_data: List
+    raw_data: List[Atoms] = None
     lmdb_path: str = None
     val_split: float = None
     elements: Optional[List[str]] = None
-    fp_scheme: str = "gmpordernorm"
-    # fp_params:
+    fp_scheme: Optional[str] = "gmpordernorm"
+    fp_params: Dict[str, GaussianParams] = None
     cutoff_params: Optional[object] = None
-    save_fps: bool = True
-    scaling: Optional[dict]
+    save_fps: Optional[bool] = True
+    scaling: Optional[dict] = None
 
 
 @dataclass
-class GMPs_params:
-    """
-    Dataclass to represent the Gaussian Momenta Parameters (GMPs) dictionary object as input to Config class fp_params.
-
-    Attributes:
-    -----------
-    orders : List[int]
-        List of integer orders of the spherical harmonics functions. For example, [0, 1, 2, 3] would account up to order 3 from order 0.
-    sigmas : List[float]
-        List of float values of the widths of the Gaussian basis functions.
-    atom_gaussians : Dict[str], optional
-        Dictionary mapping element symbols to paths of the corresponding pseudodensity files containing Gaussian basis functions for each element.
-    square : bool, optional
-        Boolean flag indicating whether to square the solid harmonics functions for smoothness in gradient calculation.
-        Default is True.
-    solid_harmonics : bool, optional
-        Boolean flag indicating whether to use solid harmonics functions instead of real spherical harmonics. Default is True.
-    """
-
-    orders: List[int]
-    sigmas: List[float]
-    atom_gaussians: Dict
-    square: bool = True
-    solid_harmonics: bool = True
-
-    # def load_atom_gaussians(self, directory: str) -> None:
-    #     for element in self.atom_gaussians:
-    #         filename = os.path.join(directory, f"{element}_pseudodensity.g")
-    #         self.atom_gaussians[element] = filename
-
-
-@dataclass
-class G2Params:
-    """
-    Dataclass representing parameters for the G2 component of the gaussian symmetry function.
-
-    Attributes:
-    -----------
-    etas: List[float]
-        A list of the exponents used in the G2 function.
-    rs_s: List[float]
-        A list of radial offsets used in the G2 function.
-    """
-
-    etas: List[float]
-    rs_s: List[float]
-
-
-@dataclass
-class G4Params:
-    """
-    Dataclass representing parameters for the G2 component of the gaussian symmetry function.
-
-    Attributes:
-    -----------
-    etas: List[float]
-        A list of exponents used in the G4 function.
-    zetas: List[float]
-        A list of zetas used in the G4 function.
-    gammas: List[float]
-        A list of gammas used in the G4 function.
-    """
-
-    etas: List[float]
-    zetas: List[float]
-    gammas: List[float]
-
-
-@dataclass
-class Gaussian_params:
-    """
-    Dataclass for Gaussian Symmetry Function with G2 and G4 with a cutoff.
-
-    Attributes:
-    -----------
-    gaussian : Dict
-        A dictionary of Gaussian types (G2 and G4) and their parameters.
-
-    cutoff : float
-        The cutoff value.
-    """
-
-    gaussian: dict
-    cutoff: int
-
-    def __init__(self, gaussian, cutoff):
-        self.gaussian = gaussian
-        self.cutoff = cutoff
-
-    @classmethod
-    def from_dict(cls, params_dict):
-        gaussian_params = params_dict.get("gaussian", {})
-        g2_params_dict = gaussian_params.get("G2", {})
-        g4_params_dict = gaussian_params.get("G4", {})
-        g2_params = G2Params(
-            etas=g2_params_dict.get("etas", []), rs_s=g2_params_dict.get("rs_s", [])
-        )
-        g4_params = G4Params(
-            etas=g4_params_dict.get("etas", []),
-            zetas=g4_params_dict.get("zetas", []),
-            gammas=g4_params_dict.get("gammas", []),
-        )
-        return cls(
-            gaussian={"G2": g2_params, "G4": g4_params},
-            cutoff=params_dict.get("cutoff", 6),
-        )
-
-
-@dataclass
-class Config_Cmd:
+class ConfigCmd(DictEmulator):
     """
     Configuration for the extra commands and idenfiers.
 
@@ -258,17 +288,17 @@ class Config_Cmd:
             If True, log results to Weights and Biases (https://www.wandb.com/). A free account is necessary to view and log results.
     """
 
-    debug: bool = False
-    dtype: Optional(object)
-    run_dir: str = "./"
-    seed: int = 0
-    identifier: str = None
-    verbose: bool = True
-    logger: bool = False
+    debug: Optional[bool] = False
+    dtype: Optional[object] = torch.DoubleTensor
+    run_dir: Optional[str] = "./"
+    seed: Optional[int] = 0
+    identifier: Optional[str] = str(datetime.now())
+    verbose: Optional[bool] = True
+    logger: Optional[bool] = False
 
 
 @dataclass
-class Config:
+class Config(DictEmulator):
     """
     Input configuration for trainer class to start the training of NNFF.
 
@@ -283,7 +313,7 @@ class Config:
     cmd: Extra commands for debugging, running directory, identifier.
     """
 
-    model: Config_Model
-    optim: Config_Optim
-    dataset: Config_Dataset
-    cmd: Config_Cmd
+    model: ConfigModel
+    optim: ConfigOptim
+    dataset: ConfigDataset
+    cmd: ConfigCmd

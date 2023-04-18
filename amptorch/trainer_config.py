@@ -11,6 +11,15 @@ class DictEmulator(ABC):
     """
     Abstract base class for emulating a dictionary, inherited by all the config dataclasses
     """
+    def __post_init__(self):
+        """
+        If an optional field that doesn't have a default value is not passed in, delete that field
+        :return: None
+        """
+        for key in list(self.__dict__):
+            if self.__getitem__(key) is None:
+                self.__delitem__(key)
+
     def __getitem__(self, item):
         return self.__dict__[item]
 
@@ -248,7 +257,7 @@ class ConfigDataset(DictEmulator):
         standardization (scales data to mean=0, stdev=1) - {"type": "standardize"}.
     """
 
-    raw_data: List[Atoms] = None
+    raw_data: Union[str, List[Atoms]] = None
     lmdb_path: str = None
     val_split: float = None
     elements: Optional[List[str]] = None

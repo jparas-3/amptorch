@@ -1,13 +1,14 @@
 from typing import List, Dict, Union, Optional, Sequence
 from dataclasses import dataclass
 from abc import ABC
+from collections.abc import MutableMapping
 from datetime import datetime
 import os
 from ase import Atoms
 import torch
 
 
-class DictEmulator(ABC):
+class DictEmulator(MutableMapping):
     """
     Abstract base class for emulating a dictionary, inherited by all the config dataclasses
     """
@@ -34,6 +35,9 @@ class DictEmulator(ABC):
 
     def get(self, key, *args):
         return self.__dict__.get(key, args[0]) if args else self.__dict__.get(key)
+
+    def __len__(self):
+        return len(self.__dict__)
 
 
 @dataclass
@@ -242,7 +246,7 @@ class ConfigDataset(DictEmulator):
 
     elements (Optional: List[str]): List of unique elements in dataset, optional. Example: ["H", "O"] for water dataset.
 
-    fp_scheme (str): Fingerprinting scheme to feature dataset, "gmpordernorm" or "gaussian" (default: "gmpordernorm").
+    fp_scheme (str): Fingerprinting scheme to feature dataset, "gmpordernorm" or "gaussian" (default: "gaussian").
 
     fp_params (dict): Fingerprint parameters, dataclass "GMP_params" or "SF_params".
 
@@ -261,7 +265,7 @@ class ConfigDataset(DictEmulator):
     lmdb_path: str = None
     val_split: float = None
     elements: Optional[List[str]] = None
-    fp_scheme: Optional[str] = "gmpordernorm"
+    fp_scheme: Optional[str] = "gaussian"
     fp_params: Dict[str, GaussianParams] = None
     cutoff_params: Optional[object] = None
     save_fps: Optional[bool] = True
